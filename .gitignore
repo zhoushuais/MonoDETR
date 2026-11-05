@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 模型权重与训练产物
+*.pth
+*.pt
+*.ckpt
+*.tar
+*.onnx
+output/
+outputs/
+work_dirs/
+logs/
+runs/
+checkpoints/
+ckpt/
+
+# 数据集
+data/
+datasets/
+*.zip
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
