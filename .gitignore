@@ -29,6 +29,12 @@ data/
 datasets/
 *.zip
 
+# 编译产物（deformable attention 扩展）
+build/
+dist/
+*.so
+*.o
+
 # 编辑器 / 系统
 .vscode/
 .idea/

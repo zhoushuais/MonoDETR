@@ -42,11 +42,13 @@ def get_extensions():
             "-D__CUDA_NO_HALF_OPERATORS__",
             "-D__CUDA_NO_HALF_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
-            "-arch=sm_60",
-            "-gencode=arch=compute_60,code=sm_60",
-            "-gencode=arch=compute_61,code=sm_61",
-            "-gencode=arch=compute_70,code=sm_70",
-            "-gencode=arch=compute_75,code=sm_75",
+            # RTX 4090 (Ada, sm_89)。原列表只到 sm_75，在 40 系卡上运行会报
+            # "no kernel image is available for execution on the device"
+            "-gencode=arch=compute_80,code=sm_80",
+            "-gencode=arch=compute_86,code=sm_86",
+            "-gencode=arch=compute_89,code=sm_89",
+            # 额外生成 PTX，供未来更新的架构 JIT 编译
+            "-gencode=arch=compute_89,code=compute_89",
 ]
     else:
         raise NotImplementedError('Cuda is not availabel')

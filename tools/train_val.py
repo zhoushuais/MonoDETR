@@ -3,6 +3,7 @@ warnings.filterwarnings("ignore")
 
 import os
 import sys
+import shutil
 import torch
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,8 @@ from lib.helpers.utils_helper import set_random_seed
 parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
 parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
 parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
+parser.add_argument('--exp_name', dest='exp_name', default=None,
+                    help='实验名，输出保存到 <trainer.save_path>/<exp_name>，不填则自动用 模型名_时间戳')
 args = parser.parse_args()
 
 
@@ -35,8 +38,14 @@ def main():
     set_random_seed(cfg.get('random_seed', 444))
 
     model_name = cfg['model_name']
-    output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name)
+    # 每个实验单独一个目录：<trainer.save_path>/<exp_name>
+    # 不指定 --exp_name 时用 模型名_时间戳，保证多次训练不会互相覆盖
+    exp_name = args.exp_name or '%s_%s' % (
+        model_name, datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    output_path = os.path.join(cfg["trainer"]['save_path'], exp_name)
     os.makedirs(output_path, exist_ok=True)
+    # 备份本次实验的配置，便于事后追溯每个实验用的参数
+    shutil.copy(args.config, os.path.join(output_path, 'config.yaml'))
 
     log_file = os.path.join(output_path, 'train.log.%s' % datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     logger = create_logger(log_file)
@@ -61,7 +70,7 @@ def main():
                         dataloader=test_loader,
                         logger=logger,
                         train_cfg=cfg['trainer'],
-                        model_name=model_name)
+                        model_name=exp_name)
         tester.test()
         return
     #ipdb.set_trace()
@@ -79,19 +88,23 @@ def main():
                       warmup_lr_scheduler=warmup_lr_scheduler,
                       logger=logger,
                       loss=loss,
-                      model_name=model_name)
+                      model_name=exp_name)
 
     tester = Tester(cfg=cfg['tester'],
                     model=trainer.model,
                     dataloader=test_loader,
                     logger=logger,
                     train_cfg=cfg['trainer'],
-                    model_name=model_name)
+                    model_name=exp_name)
     if cfg['dataset']['test_split'] != 'test':
         trainer.tester = tester
 
     logger.info('###################  Training  ##################')
-    logger.info('Batch Size: %d' % (cfg['dataset']['batch_size']))
+    logger.info('Experiment: %s' % exp_name)
+    logger.info('Output Dir: %s' % os.path.abspath(output_path))
+    _accum = int(cfg['trainer'].get('accum_steps', 1))
+    _bs = cfg['dataset']['batch_size']
+    logger.info('Batch Size: %d x accum %d = effective %d' % (_bs, _accum, _bs * _accum))
     logger.info('Learning Rate: %f' % (cfg['optimizer']['lr']))
 
     trainer.train()

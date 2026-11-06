@@ -38,7 +38,7 @@ class Trainer(object):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.detr_loss = loss
         self.model_name = model_name
-        self.output_dir = os.path.join('./' + cfg['save_path'], model_name)
+        self.output_dir = os.path.join(cfg['save_path'], model_name)
         self.tester = None
 
         # loading pretrain/resume model
@@ -119,6 +119,9 @@ class Trainer(object):
         print(">>>>>>> Epoch:", str(epoch) + ":")
 
         progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch+1 == self.cfg['max_epoch']), desc='iters')
+        # 梯度累积：等效 batch = batch_size * accum_steps
+        accum_steps = int(self.cfg.get('accum_steps', 1))
+        self.optimizer.zero_grad()
         for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
             inputs = inputs.to(self.device)
             calibs = calibs.to(self.device)
@@ -132,7 +135,6 @@ class Trainer(object):
                 dn_args=(targets, self.cfg['scalar'], self.cfg['label_noise_scale'], self.cfg['box_noise_scale'], self.cfg['num_patterns'])
             ###
             # train one batch
-            self.optimizer.zero_grad()
             outputs = self.model(inputs, calibs, targets, img_sizes, dn_args=dn_args)
             mask_dict=None
             #ipdb.set_trace()
@@ -166,10 +168,18 @@ class Trainer(object):
                 print("")
                 print("")
 
-            detr_losses.backward()
-            self.optimizer.step()
+            # 梯度累积：loss 需除以 accum_steps，否则梯度会放大 accum_steps 倍
+            (detr_losses / accum_steps).backward()
+            if (batch_idx + 1) % accum_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
             progress_bar.update()
+
+        # 处理不足一个累积窗口的尾部 batch
+        if len(self.train_loader) % accum_steps != 0:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
         progress_bar.close()
 
     def prepare_targets(self, targets, batch_size):
